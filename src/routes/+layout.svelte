@@ -1,12 +1,42 @@
 <script lang="ts">
   import '../app.css';
+  import 'highlight.js/styles/github-dark-dimmed.css';
   import Sidebar from '$components/Sidebar.svelte';
+  import Toast from '$components/Toast.svelte';
   import { uiStore } from '$lib/stores';
   import { onMount } from 'svelte';
+  import { goto } from '$app/navigation';
   import { loadConversations } from '$lib/persistence';
   import { conversationsStore, configStore } from '$lib/stores';
 
   let { children } = $props();
+
+  function handleKeydown(e: KeyboardEvent) {
+    const mod = e.metaKey || e.ctrlKey;
+    if (!mod) return;
+
+    switch (e.key) {
+      case 'n':
+        e.preventDefault();
+        conversationsStore.setActive(-1);
+        uiStore.clearPrompt();
+        goto('/');
+        break;
+      case 'k':
+        e.preventDefault();
+        // Focus sidebar search if it exists
+        const searchInput = document.querySelector('.sidebar-search input') as HTMLInputElement;
+        if (searchInput) {
+          if (uiStore.sidebarCollapsed) uiStore.toggleSidebar();
+          searchInput.focus();
+        }
+        break;
+      case ',':
+        e.preventDefault();
+        goto('/settings');
+        break;
+    }
+  }
 
   onMount(() => {
     // Load persisted conversations on mount
@@ -21,6 +51,8 @@
     }
   });
 </script>
+
+<svelte:window onkeydown={handleKeydown} />
 
 <div class="app" class:sidebar-collapsed={uiStore.sidebarCollapsed}>
   <header class="header">
@@ -46,6 +78,7 @@
       {@render children()}
     </main>
   </div>
+  <Toast />
 </div>
 
 <style>

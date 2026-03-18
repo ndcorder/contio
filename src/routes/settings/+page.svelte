@@ -55,6 +55,11 @@
     const value = (event.target as HTMLInputElement).value;
     configStore.updateDiscussion({ summaryModel: value || undefined });
   }
+
+  function handleSystemPromptChange(event: Event) {
+    const value = (event.target as HTMLTextAreaElement).value;
+    configStore.updateDiscussion({ systemPrompt: value });
+  }
 </script>
 
 <div class="settings">
@@ -189,6 +194,18 @@
           oninput={handleSummaryModelChange}
         />
         <span class="hint">Model used to generate discussion summary</span>
+      </div>
+
+      <div class="form-group">
+        <label for="systemPrompt">System Prompt</label>
+        <textarea
+          id="systemPrompt"
+          class="system-prompt-textarea"
+          placeholder="Enter the system prompt for discussion participants..."
+          value={configStore.discussion.systemPrompt}
+          oninput={handleSystemPromptChange}
+        ></textarea>
+        <span class="hint">Instructions given to each model at the start of a discussion</span>
       </div>
     </section>
   </div>
@@ -376,5 +393,23 @@
   .checkbox-group .hint {
     flex-basis: 100%;
     margin-top: 0;
+  }
+
+  .system-prompt-textarea {
+    width: 100%;
+    min-height: 100px;
+    max-height: 200px;
+    padding: 10px 12px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 13px;
+    line-height: 1.5;
+    resize: vertical;
+    transition: border-color 0.15s;
+  }
+
+  .system-prompt-textarea:focus {
+    border-color: var(--accent);
   }
 </style>

@@ -32,6 +32,12 @@
   function toggleModelSelector() {
     showModelSelector = !showModelSelector;
   }
+
+  function autoResize() {
+    if (!textareaEl) return;
+    textareaEl.style.height = 'auto';
+    textareaEl.style.height = Math.min(textareaEl.scrollHeight, 120) + 'px';
+  }
 </script>
 
 <div class="prompt-input">
@@ -63,7 +69,7 @@
       class="prompt-textarea"
       placeholder="Enter a topic for discussion..."
       value={uiStore.promptBuffer}
-      oninput={(e) => uiStore.setPromptBuffer(e.currentTarget.value)}
+      oninput={(e) => { uiStore.setPromptBuffer(e.currentTarget.value); autoResize(); }}
       onkeydown={handleKeydown}
       {disabled}
     ></textarea>

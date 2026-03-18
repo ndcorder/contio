@@ -1,11 +1,24 @@
-import { marked } from 'marked';
+import { Marked } from 'marked';
+import { markedHighlight } from 'marked-highlight';
+import hljs from 'highlight.js';
 import DOMPurify from 'dompurify';
 
-// Configure marked for safe defaults
-marked.setOptions({
-  breaks: true,
-  gfm: true
-});
+const marked = new Marked(
+  markedHighlight({
+    emptyLangClass: 'hljs',
+    langPrefix: 'hljs language-',
+    highlight(code, lang) {
+      if (lang && hljs.getLanguage(lang)) {
+        return hljs.highlight(code, { language: lang }).value;
+      }
+      return hljs.highlightAuto(code).value;
+    }
+  }),
+  {
+    breaks: true,
+    gfm: true
+  }
+);
 
 /**
  * Renders markdown content to sanitized HTML

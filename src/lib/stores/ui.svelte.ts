@@ -1,11 +1,19 @@
 export type InputMode = 'normal' | 'prompt' | 'model-select';
 
+export interface ToastNotification {
+  id: string;
+  message: string;
+  type: 'error' | 'success' | 'info';
+}
+
 function createUiStore() {
   let inputMode = $state<InputMode>('normal');
   let promptBuffer = $state<string>('');
   let selectedModels = $state<string[]>([]);
   let sidebarCollapsed = $state<boolean>(false);
   let isStreaming = $state<boolean>(false);
+  // eslint-disable-next-line prefer-const
+  let notifications: ToastNotification[] = $state([]);
 
   return {
     get inputMode() {
@@ -62,6 +70,22 @@ function createUiStore() {
 
     setStreaming(value: boolean) {
       isStreaming = value;
+    },
+
+    get notifications() {
+      return notifications;
+    },
+
+    addNotification(message: string, type: 'error' | 'success' | 'info' = 'info', timeout = 5000) {
+      const id = crypto.randomUUID();
+      notifications = [...notifications, { id, message, type }];
+      setTimeout(() => {
+        notifications = notifications.filter(n => n.id !== id);
+      }, timeout);
+    },
+
+    removeNotification(id: string) {
+      notifications = notifications.filter(n => n.id !== id);
     }
   };
 }

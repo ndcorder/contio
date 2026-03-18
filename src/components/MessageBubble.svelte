@@ -30,6 +30,18 @@
     }
   }
 
+  let copied = $state(false);
+
+  async function copyContent() {
+    try {
+      await navigator.clipboard.writeText(message.content);
+      copied = true;
+      setTimeout(() => { copied = false; }, 1500);
+    } catch {
+      // Clipboard API may be unavailable in some contexts
+    }
+  }
+
   function handleKeydown(event: KeyboardEvent) {
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
@@ -47,6 +59,18 @@
     {#if isStreaming}
       <span class="streaming-indicator">typing...</span>
     {/if}
+    <button class="copy-btn" onclick={copyContent} aria-label="Copy message">
+      {#if copied}
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="20 6 9 17 4 12" />
+        </svg>
+      {:else}
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+        </svg>
+      {/if}
+    </button>
     {#if hasSummary}
       <button class="expand-toggle" onclick={toggleExpand} aria-expanded={isExpanded}>
         {isExpanded ? 'Collapse' : 'Expand'}
@@ -143,5 +167,27 @@
 
   .collapsible {
     cursor: default;
+  }
+
+  .copy-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    color: var(--text-muted);
+    opacity: 0;
+    transition: opacity 0.15s, color 0.15s, background 0.15s;
+    cursor: pointer;
+  }
+
+  .message:hover .copy-btn {
+    opacity: 1;
+  }
+
+  .copy-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
   }
 </style>

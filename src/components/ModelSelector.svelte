@@ -12,6 +12,9 @@
   let customModelInput = $state('');
   let searchQuery = $state('');
   let activeTab = $state<LlmProvider>('openai');
+  let showKeyInput = $state(false);
+  let keyInputValue = $state('');
+  let keySavedMsg = $state(false);
 
   const allModels = getAllModels();
   const providers: LlmProvider[] = ['openai', 'anthropic', 'google', 'openrouter'];
@@ -72,6 +75,25 @@
       case 'google': return 'Ggl';
       case 'openrouter': return 'OR';
     }
+  }
+
+  function getPlaceholder(provider: LlmProvider): string {
+    switch (provider) {
+      case 'openai': return 'sk-...';
+      case 'anthropic': return 'sk-ant-...';
+      case 'google': return 'AI...';
+      case 'openrouter': return 'sk-or-...';
+    }
+  }
+
+  function saveApiKey() {
+    const value = keyInputValue.trim();
+    if (!value) return;
+    configStore.setApiKey(activeTab, value);
+    keyInputValue = '';
+    showKeyInput = false;
+    keySavedMsg = true;
+    setTimeout(() => { keySavedMsg = false; }, 2000);
   }
 </script>
 
@@ -150,12 +172,37 @@
 
   {#if !hasApiKey(activeTab)}
     <div class="api-key-warning">
+      <div class="api-key-warning-top">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" y1="8" x2="12" y2="12" />
+          <line x1="12" y1="16" x2="12.01" y2="16" />
+        </svg>
+        <span>
+          No API key configured for {getProviderLabel(activeTab)}.
+          <button class="setup-now-link" onclick={() => { showKeyInput = !showKeyInput; }}>Set up now</button>
+          or <a href="/settings">Settings</a>
+        </span>
+      </div>
+      {#if showKeyInput}
+        <div class="api-key-inline-form">
+          <input
+            type="password"
+            class="api-key-input"
+            placeholder={getPlaceholder(activeTab)}
+            bind:value={keyInputValue}
+            onkeydown={(e: KeyboardEvent) => { if (e.key === 'Enter') saveApiKey(); }}
+          />
+          <button class="api-key-save-btn" onclick={saveApiKey} disabled={!keyInputValue.trim()}>Save</button>
+        </div>
+      {/if}
+    </div>
+  {:else if keySavedMsg}
+    <div class="api-key-saved">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <circle cx="12" cy="12" r="10" />
-        <line x1="12" y1="8" x2="12" y2="12" />
-        <line x1="12" y1="16" x2="12.01" y2="16" />
+        <polyline points="20 6 9 17 4 12" />
       </svg>
-      <span>No API key configured for {getProviderLabel(activeTab)}. <a href="/settings">Configure in Settings</a></span>
+      <span>Saved!</span>
     </div>
   {/if}
 
@@ -427,8 +474,8 @@
 
   .api-key-warning {
     display: flex;
-    align-items: center;
-    gap: 8px;
+    flex-direction: column;
+    gap: 10px;
     padding: 10px 12px;
     background: rgba(245, 158, 11, 0.1);
     border: 1px solid rgba(245, 158, 11, 0.3);
@@ -438,9 +485,92 @@
     color: var(--warning);
   }
 
+  .api-key-warning-top {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .api-key-warning-top svg {
+    flex-shrink: 0;
+  }
+
   .api-key-warning a {
     color: var(--warning);
     text-decoration: underline;
+  }
+
+  .setup-now-link {
+    background: none;
+    border: none;
+    padding: 0;
+    font-size: inherit;
+    font-family: inherit;
+    color: var(--accent);
+    cursor: pointer;
+    text-decoration: none;
+  }
+
+  .setup-now-link:hover {
+    text-decoration: underline;
+  }
+
+  .api-key-inline-form {
+    display: flex;
+    gap: 8px;
+  }
+
+  .api-key-input {
+    flex: 1;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 13px;
+    color: var(--text-primary);
+    outline: none;
+  }
+
+  .api-key-input:focus {
+    border-color: var(--accent);
+  }
+
+  .api-key-input::placeholder {
+    color: var(--text-muted);
+  }
+
+  .api-key-save-btn {
+    background: var(--accent);
+    color: white;
+    border-radius: 6px;
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 500;
+    border: none;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+
+  .api-key-save-btn:hover:not(:disabled) {
+    background: var(--accent-hover);
+  }
+
+  .api-key-save-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .api-key-saved {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    background: rgba(34, 197, 94, 0.1);
+    border: 1px solid rgba(34, 197, 94, 0.3);
+    border-radius: 6px;
+    margin-bottom: 12px;
+    font-size: 12px;
+    color: rgb(34, 197, 94);
   }
 
   .custom-model {

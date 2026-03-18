@@ -83,7 +83,8 @@ export async function runDiscussion(
             role: 'assistant',
             content: response,
             participantName: participant.displayName,
-            timestamp: new Date()
+            timestamp: new Date(),
+            round: round
           };
 
           // Generate per-message summary for long messages
@@ -111,7 +112,8 @@ export async function runDiscussion(
             role: 'assistant',
             content: `[Error: ${errorMessage}]`,
             participantName: participant.displayName,
-            timestamp: new Date()
+            timestamp: new Date(),
+            round: round
           };
 
           conversation.transcript.push(chatMessage);
@@ -346,7 +348,8 @@ export async function runDiscussionStreaming(
             role: 'assistant',
             content: fullContent,
             participantName: participant.displayName,
-            timestamp: new Date()
+            timestamp: new Date(),
+            round: round
           };
 
           // Generate per-message summary for long messages
@@ -374,7 +377,8 @@ export async function runDiscussionStreaming(
             role: 'assistant',
             content: `[Error: ${errorMessage}]`,
             participantName: participant.displayName,
-            timestamp: new Date()
+            timestamp: new Date(),
+            round: round
           };
 
           conversation.transcript.push(chatMessage);
