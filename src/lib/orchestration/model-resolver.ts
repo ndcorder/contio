@@ -1,4 +1,6 @@
 import type { LlmProvider, ModelParticipant } from '$lib/models';
+// @ts-expect-error - YAML import handled by @rollup/plugin-yaml
+import modelRegistry from '$lib/data/models.yaml';
 
 // Color palette for participants
 const COLOR_PALETTE = [
@@ -13,13 +15,67 @@ const COLOR_PALETTE = [
 
 // Provider colors for UI consistency
 export const PROVIDER_COLORS: Record<LlmProvider, string> = {
-  openai: '#00ff00',    // green
-  anthropic: '#ff8700', // orange
-  google: '#0087ff',    // blue
-  openrouter: '#ff00ff' // magenta
+  openai: '#10a37f',    // OpenAI green
+  anthropic: '#d97706', // Anthropic orange
+  google: '#4285f4',    // Google blue
+  openrouter: '#a855f7' // OpenRouter purple
 };
 
+export interface PricingInfo {
+  input: number;
+  output: number;
+}
+
+export interface ModelDefinition {
+  id: string;
+  display: string;
+  context: number;
+  pricing?: PricingInfo;
+  provider?: LlmProvider;
+}
+
+interface YamlModelRegistry {
+  models: {
+    openai: ModelDefinition[];
+    anthropic: ModelDefinition[];
+    google: ModelDefinition[];
+    openrouter: ModelDefinition[];
+  };
+}
+
+// Build a lookup map from the registry
+const modelLookup = new Map<string, ModelDefinition>();
+
+function initRegistry() {
+  const registry = modelRegistry as YamlModelRegistry;
+
+  for (const model of registry.models.openai) {
+    modelLookup.set(model.id.toLowerCase(), { ...model, provider: 'openai' });
+  }
+  for (const model of registry.models.anthropic) {
+    modelLookup.set(model.id.toLowerCase(), { ...model, provider: 'anthropic' });
+  }
+  for (const model of registry.models.google) {
+    modelLookup.set(model.id.toLowerCase(), { ...model, provider: 'google' });
+  }
+  for (const model of registry.models.openrouter) {
+    modelLookup.set(model.id.toLowerCase(), { ...model, provider: 'openrouter' });
+  }
+}
+initRegistry();
+
+export function getModel(modelId: string): ModelDefinition | undefined {
+  return modelLookup.get(modelId.toLowerCase());
+}
+
 export function resolveProvider(modelId: string): LlmProvider {
+  // First check the registry
+  const model = getModel(modelId);
+  if (model?.provider) {
+    return model.provider;
+  }
+
+  // Fall back to prefix-based resolution
   const lower = modelId.toLowerCase();
 
   // OpenAI models
@@ -36,7 +92,7 @@ export function resolveProvider(modelId: string): LlmProvider {
   }
 
   // Google models
-  if (lower.startsWith('gemini-')) {
+  if (lower.startsWith('gemini-') || lower.startsWith('gemma-')) {
     return 'google';
   }
 
@@ -45,6 +101,12 @@ export function resolveProvider(modelId: string): LlmProvider {
 }
 
 export function getDisplayName(modelId: string): string {
+  // Check registry first
+  const model = getModel(modelId);
+  if (model) {
+    return model.display;
+  }
+
   // If it contains a slash (OpenRouter format), use the part after the slash
   if (modelId.includes('/')) {
     return modelId.split('/').pop() ?? modelId;
@@ -69,16 +131,35 @@ export function parseModelsCsv(csv: string): ModelParticipant[] {
   return parseModels(modelIds);
 }
 
-// Common models for quick selection
-export const COMMON_MODELS: Array<{ id: string; name: string; provider: LlmProvider }> = [
-  { id: 'gpt-4o', name: 'GPT-4o', provider: 'openai' },
-  { id: 'gpt-4o-mini', name: 'GPT-4o Mini', provider: 'openai' },
-  { id: 'o1', name: 'o1', provider: 'openai' },
-  { id: 'o1-mini', name: 'o1 Mini', provider: 'openai' },
-  { id: 'claude-sonnet-4-20250514', name: 'Claude Sonnet 4', provider: 'anthropic' },
-  { id: 'claude-opus-4-20250514', name: 'Claude Opus 4', provider: 'anthropic' },
-  { id: 'claude-3-5-haiku-20241022', name: 'Claude 3.5 Haiku', provider: 'anthropic' },
-  { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', provider: 'google' },
-  { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', provider: 'google' },
-  { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', provider: 'google' }
-];
+// Get all models from the registry, grouped by provider
+export function getAllModels(): Record<LlmProvider, ModelDefinition[]> {
+  const registry = modelRegistry as YamlModelRegistry;
+  return {
+    openai: registry.models.openai.map(m => ({ ...m, provider: 'openai' as LlmProvider })),
+    anthropic: registry.models.anthropic.map(m => ({ ...m, provider: 'anthropic' as LlmProvider })),
+    google: registry.models.google.map(m => ({ ...m, provider: 'google' as LlmProvider })),
+    openrouter: registry.models.openrouter.map(m => ({ ...m, provider: 'openrouter' as LlmProvider }))
+  };
+}
+
+// Flat list of all models for easy iteration
+export function getAllModelsList(): ModelDefinition[] {
+  const all = getAllModels();
+  return [
+    ...all.openai,
+    ...all.anthropic,
+    ...all.google,
+    ...all.openrouter
+  ];
+}
+
+// Get model count per provider
+export function getModelCounts(): Record<LlmProvider, number> {
+  const all = getAllModels();
+  return {
+    openai: all.openai.length,
+    anthropic: all.anthropic.length,
+    google: all.google.length,
+    openrouter: all.openrouter.length
+  };
+}
