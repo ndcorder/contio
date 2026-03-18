@@ -13,6 +13,8 @@ export interface DiscussionSettings {
   observerModel: string;
   summaryModel?: string;
   summaryMaxTokens: number;
+  messageSummaryThreshold: number;
+  messageSummaryMaxTokens: number;
 }
 
 export interface UserConfig {
@@ -28,7 +30,9 @@ export const defaultDiscussionSettings: DiscussionSettings = {
   enableAutoConclusion: true,
   observerModel: 'gemini-2.5-flash',
   summaryModel: 'gemini-2.5-flash',
-  summaryMaxTokens: 4096
+  summaryMaxTokens: 4096,
+  messageSummaryThreshold: 500,
+  messageSummaryMaxTokens: 100
 };
 
 export const defaultConfig: UserConfig = {

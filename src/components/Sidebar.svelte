@@ -100,7 +100,7 @@
 
   .sidebar.collapsed {
     width: 0;
-    margin-left: calc(var(--sidebar-width) * -1);
+    border-right: none;
   }
 
   .sidebar-header {

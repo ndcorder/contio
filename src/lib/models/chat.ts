@@ -3,6 +3,7 @@ export interface ChatMessage {
   content: string;
   participantName?: string;
   timestamp?: Date;
+  summary?: string;
 }
 
 export interface DiscussionRound {

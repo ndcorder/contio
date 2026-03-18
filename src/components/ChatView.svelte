@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { ConversationState } from '$lib/models';
   import MessageBubble from './MessageBubble.svelte';
+  import { renderMarkdown } from '$lib/utils/markdown';
   import { tick } from 'svelte';
 
   interface Props {
@@ -67,7 +68,7 @@
     {#if conversation.summary}
       <div class="summary">
         <h3>Summary</h3>
-        <div class="summary-content">{conversation.summary}</div>
+        <div class="summary-content markdown-content">{@html renderMarkdown(conversation.summary)}</div>
       </div>
     {/if}
   {:else}
@@ -162,7 +163,6 @@
     font-size: 14px;
     line-height: 1.6;
     color: var(--text-primary);
-    white-space: pre-wrap;
   }
 
   .empty-state {

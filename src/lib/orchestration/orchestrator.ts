@@ -86,6 +86,17 @@ export async function runDiscussion(
             timestamp: new Date()
           };
 
+          // Generate per-message summary for long messages
+          if (response.length >= settings.messageSummaryThreshold) {
+            chatMessage.summary = await generateMessageSummary(
+              response,
+              participant.modelId,
+              provider,
+              settings.messageSummaryMaxTokens,
+              signal
+            );
+          }
+
           conversation.transcript.push(chatMessage);
           onMessage?.(chatMessage);
         } catch (err) {
@@ -224,6 +235,30 @@ async function generateSummary(
   }
 }
 
+async function generateMessageSummary(
+  content: string,
+  modelId: string,
+  provider: LlmProviderInterface,
+  maxTokens: number,
+  signal?: AbortSignal
+): Promise<string | undefined> {
+  try {
+    const prompt = `Summarize this response in one concise sentence (max 20 words):\n\n${content}`;
+
+    const summary = await provider.getCompletion(
+      modelId,
+      [{ role: 'user', content: prompt }],
+      maxTokens,
+      signal
+    );
+
+    return summary.trim();
+  } catch (err) {
+    console.warn('Failed to generate message summary:', err);
+    return undefined;
+  }
+}
+
 // Streaming version for real-time display
 export async function runDiscussionStreaming(
   conversation: ConversationState,
@@ -313,6 +348,17 @@ export async function runDiscussionStreaming(
             participantName: participant.displayName,
             timestamp: new Date()
           };
+
+          // Generate per-message summary for long messages
+          if (fullContent.length >= settings.messageSummaryThreshold) {
+            chatMessage.summary = await generateMessageSummary(
+              fullContent,
+              participant.modelId,
+              provider,
+              settings.messageSummaryMaxTokens,
+              signal
+            );
+          }
 
           conversation.transcript.push(chatMessage);
           onMessage?.(chatMessage);

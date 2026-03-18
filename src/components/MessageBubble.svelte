@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { ChatMessage, ModelParticipant } from '$lib/models';
+  import { renderMarkdown } from '$lib/utils/markdown';
 
   interface Props {
     message: ChatMessage;
@@ -9,12 +10,35 @@
 
   let { message, participant, isStreaming = false }: Props = $props();
 
+  let hasSummary = $derived(!!message.summary);
+  let isExpanded = $state(false);
+
+  // Auto-expand if no summary available
+  $effect(() => {
+    if (!hasSummary) {
+      isExpanded = true;
+    }
+  });
+
   function getColor(): string {
     return participant?.color ?? '#6366f1';
   }
+
+  function toggleExpand() {
+    if (hasSummary) {
+      isExpanded = !isExpanded;
+    }
+  }
+
+  function handleKeydown(event: KeyboardEvent) {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      toggleExpand();
+    }
+  }
 </script>
 
-<div class="message" style="--participant-color: {getColor()}">
+<div class="message" class:collapsible={hasSummary} style="--participant-color: {getColor()}">
   <div class="message-header">
     <span class="participant-name" style="color: {getColor()}">{message.participantName ?? 'System'}</span>
     {#if message.timestamp}
@@ -23,10 +47,27 @@
     {#if isStreaming}
       <span class="streaming-indicator">typing...</span>
     {/if}
+    {#if hasSummary}
+      <button class="expand-toggle" onclick={toggleExpand} aria-expanded={isExpanded}>
+        {isExpanded ? 'Collapse' : 'Expand'}
+      </button>
+    {/if}
   </div>
-  <div class="message-content">
-    {message.content}
-  </div>
+  {#if isExpanded}
+    <div class="message-content markdown-content">
+      {@html renderMarkdown(message.content)}
+    </div>
+  {:else}
+    <div
+      class="message-summary"
+      role="button"
+      tabindex="0"
+      onclick={toggleExpand}
+      onkeydown={handleKeydown}
+    >
+      {message.summary}
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -70,7 +111,37 @@
     font-size: 14px;
     line-height: 1.6;
     color: var(--text-primary);
-    white-space: pre-wrap;
     word-wrap: break-word;
+  }
+
+  .expand-toggle {
+    margin-left: auto;
+    font-size: 11px;
+    color: var(--accent);
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: var(--bg-tertiary);
+    transition: background 0.15s;
+  }
+
+  .expand-toggle:hover {
+    background: var(--bg-hover);
+  }
+
+  .message-summary {
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--text-secondary);
+    font-style: italic;
+    cursor: pointer;
+    padding: 4px 0;
+  }
+
+  .message-summary:hover {
+    color: var(--text-primary);
+  }
+
+  .collapsible {
+    cursor: default;
   }
 </style>
