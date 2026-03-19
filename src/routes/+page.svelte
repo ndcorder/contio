@@ -53,10 +53,15 @@
     streamingParticipant = undefined;
     streamingContent = '';
 
+    // Resolve the discussion mode
+    const modeId = conv.mode ?? configStore.discussion.mode ?? 'debate';
+    const mode = configStore.getMode(modeId);
+
     try {
       await runDiscussionStreaming(
         conv, providers, configStore.discussion,
-        createCallbacks(conv), abortController.signal
+        createCallbacks(conv), abortController.signal,
+        mode
       );
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Discussion failed';
@@ -69,16 +74,26 @@
     }
   }
 
-  async function handleSubmit(prompt: string, modelIds: string[]) {
+  async function handleSubmit(prompt: string, modelIds: string[], mode: string) {
     const participants = parseModels(modelIds);
+
+    // Record model usage for recents
+    for (const p of participants) {
+      configStore.recordModelUsage(p.modelId, p.provider);
+    }
+
     const conversation = conversationsStore.add(
-      prompt, participants, configStore.discussion.defaultRounds
+      prompt, participants, configStore.discussion.defaultRounds, mode
     );
     await runDiscussion(conversation);
   }
 
   function handleRerun(conv: ConversationState) {
-    handleSubmit(conv.prompt, conv.participants.map(p => p.modelId));
+    handleSubmit(
+      conv.prompt,
+      conv.participants.map(p => p.modelId),
+      conv.mode ?? uiStore.selectedMode
+    );
   }
 
   function handleContinue(conv: ConversationState) {
@@ -86,7 +101,6 @@
   }
 
   function handleKeydown(event: KeyboardEvent) {
-    // Escape to cancel running discussion
     if (event.key === 'Escape' && abortController) {
       abortController.abort();
     }

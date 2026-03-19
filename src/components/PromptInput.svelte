@@ -1,9 +1,10 @@
 <script lang="ts">
   import { uiStore } from '$lib/stores';
   import ModelSelector from './ModelSelector.svelte';
+  import ModeSelector from './ModeSelector.svelte';
 
   interface Props {
-    onSubmit: (prompt: string, models: string[]) => void;
+    onSubmit: (prompt: string, models: string[], mode: string) => void;
     disabled?: boolean;
   }
 
@@ -18,7 +19,7 @@
 
     if (!prompt || models.length < 2 || disabled) return;
 
-    onSubmit(prompt, models);
+    onSubmit(prompt, models, uiStore.selectedMode);
     uiStore.clearPrompt();
   }
 
@@ -88,11 +89,14 @@
   </div>
 
   <div class="input-footer">
-    {#if uiStore.selectedModels.length < 2}
-      <span class="hint error">Select at least 2 models to start a discussion</span>
-    {:else}
-      <span class="hint">Press Cmd+Enter to send</span>
-    {/if}
+    <div class="footer-left">
+      <ModeSelector />
+      {#if uiStore.selectedModels.length < 2}
+        <span class="hint error">Select at least 2 models</span>
+      {:else}
+        <span class="hint">Cmd+Enter to send</span>
+      {/if}
+    </div>
     <span class="models-preview">
       {#each uiStore.selectedModels.slice(0, 3) as model}
         <span class="model-chip">{model}</span>
@@ -202,6 +206,12 @@
     justify-content: space-between;
     margin-top: 8px;
     font-size: 12px;
+  }
+
+  .footer-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
   }
 
   .hint {

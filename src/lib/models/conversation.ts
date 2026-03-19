@@ -14,13 +14,16 @@ export interface ConversationState {
   errorMessage?: string;
   endedByConsensus: boolean;
   summary?: string;
+  mode?: string;
+  verdictMode?: string;
   createdAt: Date;
 }
 
 export function createConversation(
   prompt: string,
   participants: ModelParticipant[],
-  rounds: number
+  rounds: number,
+  mode?: string
 ): ConversationState {
   return {
     id: crypto.randomUUID(),
@@ -31,6 +34,7 @@ export function createConversation(
     currentRound: 0,
     status: 'pending',
     endedByConsensus: false,
+    mode,
     createdAt: new Date()
   };
 }

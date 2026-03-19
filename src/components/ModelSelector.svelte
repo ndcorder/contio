@@ -11,16 +11,38 @@
 
   let customModelInput = $state('');
   let searchQuery = $state('');
-  let activeTab = $state<LlmProvider>('openai');
+  let activeTab = $state<LlmProvider | 'recents'>('recents');
   let showKeyInput = $state(false);
   let keyInputValue = $state('');
   let keySavedMsg = $state(false);
+  let showPresetInput = $state(false);
+  let presetNameInput = $state('');
+  let editingPresetId = $state<string | null>(null);
+  let editingPresetName = $state('');
 
   const allModels = getAllModels();
   const providers: LlmProvider[] = ['openai', 'anthropic', 'google', 'openrouter'];
 
-  // Filter models based on search query
+  const recentModels = $derived(configStore.getRecentModels());
+
   function getFilteredModels(): ModelDefinition[] {
+    if (activeTab === 'recents') {
+      const recents = recentModels;
+      const allModelsList = [...allModels.openai, ...allModels.anthropic, ...allModels.google, ...allModels.openrouter];
+      const recentDefs = recents.map(r => {
+        const found = allModelsList.find(m => m.id === r.modelId);
+        if (found) return { ...found, provider: r.provider };
+        return { id: r.modelId, display: r.modelId, context: 0, provider: r.provider };
+      });
+
+      if (!searchQuery.trim()) return recentDefs;
+      const query = searchQuery.toLowerCase();
+      return recentDefs.filter(m =>
+        m.id.toLowerCase().includes(query) ||
+        m.display.toLowerCase().includes(query)
+      );
+    }
+
     const models = allModels[activeTab];
     if (!searchQuery.trim()) return models;
 
@@ -89,11 +111,59 @@
   function saveApiKey() {
     const value = keyInputValue.trim();
     if (!value) return;
-    configStore.setApiKey(activeTab, value);
+    if (activeTab !== 'recents') {
+      configStore.setApiKey(activeTab, value);
+    }
     keyInputValue = '';
     showKeyInput = false;
     keySavedMsg = true;
     setTimeout(() => { keySavedMsg = false; }, 2000);
+  }
+
+  // Preset functions
+  function saveAsPreset() {
+    const name = presetNameInput.trim();
+    if (!name || uiStore.selectedModels.length === 0) return;
+    configStore.addPreset(name, [...uiStore.selectedModels], uiStore.selectedMode);
+    presetNameInput = '';
+    showPresetInput = false;
+  }
+
+  function loadPreset(preset: { modelIds: string[]; discussionMode?: string }) {
+    uiStore.setSelectedModels(preset.modelIds);
+    if (preset.discussionMode) {
+      uiStore.setSelectedMode(preset.discussionMode);
+    }
+  }
+
+  function startEditPreset(id: string, name: string, event: MouseEvent) {
+    event.stopPropagation();
+    editingPresetId = id;
+    editingPresetName = name;
+  }
+
+  function finishEditPreset() {
+    if (editingPresetId && editingPresetName.trim()) {
+      configStore.renamePreset(editingPresetId, editingPresetName.trim());
+    }
+    editingPresetId = null;
+    editingPresetName = '';
+  }
+
+  function deletePreset(id: string, event: MouseEvent) {
+    event.stopPropagation();
+    configStore.removePreset(id);
+  }
+
+  function getModelSearchCount(): number {
+    if (activeTab === 'recents') return recentModels.length;
+    return allModels[activeTab].length;
+  }
+
+  function getProviderForModel(modelId: string): LlmProvider | undefined {
+    if (activeTab !== 'recents') return activeTab;
+    const recent = recentModels.find(r => r.modelId === modelId);
+    return recent?.provider;
   }
 </script>
 
@@ -103,7 +173,64 @@
     <span class="selected-count">{uiStore.selectedModels.length} selected</span>
   </div>
 
+  <!-- Presets Row -->
+  {#if configStore.presets.length > 0}
+    <div class="presets-row">
+      <span class="presets-label">Presets:</span>
+      <div class="presets-chips">
+        {#each configStore.presets as preset (preset.id)}
+          {#if editingPresetId === preset.id}
+            <input
+              class="preset-edit-input"
+              type="text"
+              bind:value={editingPresetName}
+              onblur={finishEditPreset}
+              onkeydown={(e) => { if (e.key === 'Enter') finishEditPreset(); if (e.key === 'Escape') { editingPresetId = null; } }}
+              autofocus
+            />
+          {:else}
+            <div
+              class="preset-chip"
+              role="button"
+              tabindex="0"
+              onclick={() => loadPreset(preset)}
+              onkeydown={(e) => { if (e.key === 'Enter') loadPreset(preset); }}
+              title="{preset.modelIds.length} models: {preset.modelIds.join(', ')}"
+            >
+              <span class="preset-name">{preset.name}</span>
+              <span class="preset-count">{preset.modelIds.length}</span>
+              <span class="preset-edit" role="button" tabindex="0" onclick={(e) => startEditPreset(preset.id, preset.name, e)} onkeydown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); startEditPreset(preset.id, preset.name, e as unknown as MouseEvent); }}} title="Rename" aria-label="Rename preset">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                </svg>
+              </span>
+              <span class="preset-delete" role="button" tabindex="0" onclick={(e) => deletePreset(preset.id, e)} onkeydown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); deletePreset(preset.id, e as unknown as MouseEvent); }}} title="Delete" aria-label="Delete preset">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </span>
+            </div>
+          {/if}
+        {/each}
+      </div>
+    </div>
+  {/if}
+
   <div class="provider-tabs">
+    <button
+      class="tab"
+      class:active={activeTab === 'recents'}
+      onclick={() => { activeTab = 'recents'; searchQuery = ''; }}
+    >
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink: 0;">
+        <circle cx="12" cy="12" r="10" />
+        <polyline points="12 6 12 12 16 14" />
+      </svg>
+      <span class="tab-label">Recent</span>
+      <span class="tab-count">{recentModels.length}</span>
+    </button>
     {#each providers as provider}
       <button
         class="tab"
@@ -129,7 +256,7 @@
     </svg>
     <input
       type="text"
-      placeholder="Search {allModels[activeTab].length} models..."
+      placeholder="Search {getModelSearchCount()} models..."
       bind:value={searchQuery}
     />
     {#if searchQuery}
@@ -144,7 +271,8 @@
 
   <div class="model-list">
     {#each getFilteredModels() as model (model.id)}
-      {@const keyConfigured = hasApiKey(activeTab)}
+      {@const modelProvider = getProviderForModel(model.id)}
+      {@const keyConfigured = modelProvider ? hasApiKey(modelProvider) : true}
       <button
         class="model-item"
         class:selected={isSelected(model.id)}
@@ -159,18 +287,29 @@
           {/if}
         </span>
         <span class="model-info">
-          <span class="model-name">{model.display}</span>
+          <span class="model-name">
+            {#if activeTab === 'recents' && model.provider}
+              <span class="provider-dot" style="background: {PROVIDER_COLORS[model.provider as LlmProvider]}"></span>
+            {/if}
+            {model.display}
+          </span>
           <span class="model-id">{model.id}</span>
         </span>
-        <span class="context-size">{(model.context / 1000).toFixed(0)}k</span>
+        {#if model.context > 0}
+          <span class="context-size">{(model.context / 1000).toFixed(0)}k</span>
+        {/if}
       </button>
     {/each}
     {#if getFilteredModels().length === 0}
-      <div class="no-results">No models match "{searchQuery}"</div>
+      {#if activeTab === 'recents' && !searchQuery}
+        <div class="no-results">Your recently used models will appear here</div>
+      {:else}
+        <div class="no-results">No models match "{searchQuery}"</div>
+      {/if}
     {/if}
   </div>
 
-  {#if !hasApiKey(activeTab)}
+  {#if activeTab !== 'recents' && !hasApiKey(activeTab)}
     <div class="api-key-warning">
       <div class="api-key-warning-top">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -220,7 +359,33 @@
 
   {#if uiStore.selectedModels.length > 0}
     <div class="selected-models">
-      <div class="selected-label">Selected:</div>
+      <div class="selected-header">
+        <span class="selected-label">Selected:</span>
+        {#if !showPresetInput}
+          <button class="save-preset-btn" onclick={() => showPresetInput = true}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+              <polyline points="17 21 17 13 7 13 7 21" />
+              <polyline points="7 3 7 8 15 8" />
+            </svg>
+            Save as preset
+          </button>
+        {/if}
+      </div>
+      {#if showPresetInput}
+        <div class="preset-save-form">
+          <input
+            type="text"
+            class="preset-name-input"
+            placeholder="Preset name..."
+            bind:value={presetNameInput}
+            onkeydown={(e) => { if (e.key === 'Enter') saveAsPreset(); if (e.key === 'Escape') showPresetInput = false; }}
+            autofocus
+          />
+          <button class="preset-save-btn" onclick={saveAsPreset} disabled={!presetNameInput.trim()}>Save</button>
+          <button class="preset-cancel-btn" onclick={() => showPresetInput = false}>Cancel</button>
+        </div>
+      {/if}
       <div class="selected-tags">
         {#each uiStore.selectedModels as modelId}
           <span class="selected-tag">
@@ -265,6 +430,98 @@
     color: var(--text-muted);
   }
 
+  /* Presets */
+  .presets-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+    overflow-x: auto;
+  }
+
+  .presets-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    flex-shrink: 0;
+  }
+
+  .presets-chips {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+  }
+
+  .preset-chip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 12px;
+    color: var(--text-primary);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: border-color 0.15s;
+    user-select: none;
+  }
+
+  .preset-chip:hover {
+    border-color: var(--accent);
+  }
+
+  .preset-name {
+    font-weight: 500;
+  }
+
+  .preset-count {
+    font-size: 10px;
+    padding: 1px 4px;
+    background: var(--bg-tertiary);
+    border-radius: 3px;
+    color: var(--text-muted);
+  }
+
+  .preset-edit, .preset-delete {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    border-radius: 3px;
+    color: var(--text-muted);
+    opacity: 0;
+    transition: opacity 0.15s, background 0.15s, color 0.15s;
+  }
+
+  .preset-chip:hover .preset-edit,
+  .preset-chip:hover .preset-delete {
+    opacity: 1;
+  }
+
+  .preset-edit:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
+
+  .preset-delete:hover {
+    background: var(--error);
+    color: white;
+  }
+
+  .preset-edit-input {
+    padding: 4px 8px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    font-size: 12px;
+    color: var(--text-primary);
+    outline: none;
+    width: 100px;
+  }
+
+  /* Provider Tabs */
   .provider-tabs {
     display: flex;
     gap: 4px;
@@ -279,8 +536,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 6px;
-    padding: 8px 12px;
+    gap: 4px;
+    padding: 8px 8px;
     border-radius: 6px;
     font-size: 12px;
     font-weight: 500;
@@ -339,6 +596,7 @@
     justify-content: center;
   }
 
+  /* Search */
   .search-box {
     display: flex;
     align-items: center;
@@ -391,6 +649,7 @@
     font-size: 13px;
   }
 
+  /* Model list */
   .model-list {
     display: flex;
     flex-direction: column;
@@ -452,6 +711,16 @@
     font-size: 13px;
     color: var(--text-primary);
     font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .provider-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
   }
 
   .model-id {
@@ -472,6 +741,7 @@
     flex-shrink: 0;
   }
 
+  /* API Key */
   .api-key-warning {
     display: flex;
     flex-direction: column;
@@ -573,6 +843,7 @@
     color: rgb(34, 197, 94);
   }
 
+  /* Custom model */
   .custom-model {
     display: flex;
     gap: 8px;
@@ -611,15 +882,76 @@
     cursor: not-allowed;
   }
 
+  /* Selected models */
   .selected-models {
     padding-top: 12px;
     border-top: 1px solid var(--border-color);
   }
 
+  .selected-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+  }
+
   .selected-label {
     font-size: 12px;
     color: var(--text-muted);
+  }
+
+  .save-preset-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    color: var(--text-muted);
+    padding: 2px 6px;
+    border-radius: 4px;
+    transition: color 0.15s, background 0.15s;
+  }
+
+  .save-preset-btn:hover {
+    color: var(--accent);
+    background: var(--bg-hover);
+  }
+
+  .preset-save-form {
+    display: flex;
+    gap: 6px;
     margin-bottom: 8px;
+  }
+
+  .preset-name-input {
+    flex: 1;
+    padding: 6px 10px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    font-size: 12px;
+    color: var(--text-primary);
+    outline: none;
+  }
+
+  .preset-save-btn {
+    padding: 6px 12px;
+    background: var(--accent);
+    color: white;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+  }
+
+  .preset-save-btn:disabled {
+    opacity: 0.5;
+  }
+
+  .preset-cancel-btn {
+    padding: 6px 12px;
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    border-radius: 6px;
+    font-size: 12px;
   }
 
   .selected-tags {

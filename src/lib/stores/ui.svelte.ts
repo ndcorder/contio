@@ -10,6 +10,7 @@ function createUiStore() {
   let inputMode = $state<InputMode>('normal');
   let promptBuffer = $state<string>('');
   let selectedModels = $state<string[]>([]);
+  let selectedMode = $state<string>('debate');
   let sidebarCollapsed = $state<boolean>(false);
   let isStreaming = $state<boolean>(false);
   // eslint-disable-next-line prefer-const
@@ -36,8 +37,16 @@ function createUiStore() {
       return isStreaming;
     },
 
+    get selectedMode() {
+      return selectedMode;
+    },
+
     setInputMode(mode: InputMode) {
       inputMode = mode;
+    },
+
+    setSelectedMode(mode: string) {
+      selectedMode = mode;
     },
 
     setPromptBuffer(value: string) {

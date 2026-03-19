@@ -19,11 +19,11 @@ function createConversationsStore() {
       return conversations[activeIndex];
     },
 
-    add(prompt: string, participants: ModelParticipant[], rounds: number): ConversationState {
-      const conversation = createConversation(prompt, participants, rounds);
+    add(prompt: string, participants: ModelParticipant[], rounds: number, mode?: string): ConversationState {
+      const conversation = createConversation(prompt, participants, rounds, mode);
       conversations = [conversation, ...conversations];
       activeIndex = 0;
-      return conversation;
+      return conversations[0];
     },
 
     setActive(index: number) {

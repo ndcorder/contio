@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { ConversationState, ApiKeys } from '$lib/models';
+  import { BUILT_IN_MODES } from '$lib/models';
   import MessageBubble from './MessageBubble.svelte';
   import { renderMarkdown } from '$lib/utils/markdown';
   import { configStore } from '$lib/stores';
@@ -48,6 +49,25 @@
     return conversation.participants.find(p => p.displayName === name);
   }
 
+  function getModeName(modeId: string | undefined): string | undefined {
+    if (!modeId) return undefined;
+    const mode = BUILT_IN_MODES.find(m => m.id === modeId) ?? configStore.customModes.find(m => m.id === modeId);
+    return mode?.name;
+  }
+
+  const VERDICT_LABELS: Record<string, { title: string; icon: string }> = {
+    'debate': { title: 'Verdict', icon: '&#9878;' },
+    'devils-advocate': { title: 'Scrutiny Report', icon: '&#128520;' },
+    'steelman': { title: 'Steelman Synthesis', icon: '&#9883;' },
+    'socratic': { title: 'Inquiry Summary', icon: '&#10068;' },
+    'pros-cons': { title: 'Weighted Assessment', icon: '&#9878;' },
+    'brainstorm': { title: 'Ideas Summary', icon: '&#9889;' },
+  };
+
+  function getVerdictInfo(modeId: string | undefined) {
+    return VERDICT_LABELS[modeId ?? 'debate'] ?? VERDICT_LABELS['debate'];
+  }
+
   // Auto-scroll only when near bottom
   $effect(() => {
     if (conversation?.transcript.length || streamingContent) {
@@ -67,6 +87,12 @@
       <div class="meta">
         <span class="status status-{conversation.status}">{conversation.status}</span>
         <span class="round">Round {conversation.currentRound}/{conversation.rounds}</span>
+        {#if conversation.mode}
+          {@const modeName = getModeName(conversation.mode)}
+          {#if modeName}
+            <span class="mode-badge">{modeName}</span>
+          {/if}
+        {/if}
         {#if conversation.endedByConsensus}
           <span class="consensus">Ended by consensus</span>
         {/if}
@@ -121,9 +147,13 @@
     </div>
 
     {#if conversation.summary}
-      <div class="summary">
-        <h3>Summary</h3>
-        <div class="summary-content markdown-content">{@html renderMarkdown(conversation.summary)}</div>
+      {@const verdictInfo = getVerdictInfo(conversation.verdictMode)}
+      <div class="verdict-card">
+        <div class="verdict-header">
+          <span class="verdict-icon">{@html verdictInfo.icon}</span>
+          <h3>{verdictInfo.title}</h3>
+        </div>
+        <div class="verdict-content markdown-content">{@html renderMarkdown(conversation.summary)}</div>
       </div>
     {/if}
   {:else}
@@ -226,6 +256,15 @@
     color: var(--success);
   }
 
+  .mode-badge {
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: rgba(99, 102, 241, 0.15);
+    color: var(--accent);
+    font-weight: 500;
+    font-size: 12px;
+  }
+
   .participants {
     display: flex;
     flex-wrap: wrap;
@@ -295,24 +334,38 @@
     white-space: nowrap;
   }
 
-  .summary {
+  .verdict-card {
     margin-top: 24px;
     padding: 20px;
-    background: var(--bg-tertiary);
-    border-radius: 8px;
-    border: 1px solid var(--border-color);
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(139, 92, 246, 0.05));
+    border-radius: 10px;
+    border: 1px solid rgba(99, 102, 241, 0.25);
   }
 
-  .summary h3 {
-    font-size: 14px;
+  .verdict-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(99, 102, 241, 0.15);
+  }
+
+  .verdict-icon {
+    font-size: 20px;
+    line-height: 1;
+  }
+
+  .verdict-header h3 {
+    font-size: 15px;
     font-weight: 600;
-    color: var(--text-secondary);
-    margin-bottom: 12px;
+    color: var(--accent);
+    margin: 0;
   }
 
-  .summary-content {
+  .verdict-content {
     font-size: 14px;
-    line-height: 1.6;
+    line-height: 1.7;
     color: var(--text-primary);
   }
 

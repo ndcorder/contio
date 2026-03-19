@@ -1,6 +1,6 @@
-import type { ConversationState, ChatMessage, DiscussionSettings, LlmProvider } from '$lib/models';
+import type { ConversationState, ChatMessage, DiscussionSettings, LlmProvider, DiscussionMode } from '$lib/models';
 import type { LlmProviderInterface } from '$lib/providers';
-import { buildMessages, buildObserverPrompt, buildSummaryPrompt } from './prompt-builder';
+import { buildMessages, buildObserverPrompt, buildVerdictPrompt } from './prompt-builder';
 import { resolveProvider } from './model-resolver';
 
 export interface OrchestratorCallbacks {
@@ -25,7 +25,8 @@ export async function runDiscussion(
   providers: Map<LlmProvider, LlmProviderInterface>,
   settings: DiscussionSettings,
   callbacks: OrchestratorCallbacks = {},
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  mode?: DiscussionMode
 ): Promise<void> {
   const { onMessage, onRoundStart, onStatusChange, onComplete, onError } = callbacks;
 
@@ -52,7 +53,8 @@ export async function runDiscussion(
       const isFinalRound = round === conversation.rounds;
       const shuffledParticipants = shuffleArray(conversation.participants);
 
-      for (const participant of shuffledParticipants) {
+      for (let pIdx = 0; pIdx < shuffledParticipants.length; pIdx++) {
+        const participant = shuffledParticipants[pIdx];
         if (signal?.aborted) {
           throw new Error('Cancelled by user');
         }
@@ -68,7 +70,10 @@ export async function runDiscussion(
           conversation.prompt,
           conversation.transcript,
           participant,
-          isFinalRound
+          isFinalRound,
+          mode,
+          pIdx,
+          shuffledParticipants.length
         );
 
         try {
@@ -142,10 +147,12 @@ export async function runDiscussion(
     conversation.endedByConsensus = endedByConsensus;
     onStatusChange?.('complete');
 
-    // Generate summary if configured
+    // Generate verdict/summary if configured
     if (settings.summaryModel && conversation.transcript.length > 0) {
-      const summary = await generateSummary(
+      const modeId = conversation.mode ?? settings.mode ?? 'debate';
+      const summary = await generateVerdict(
         conversation,
+        modeId,
         settings.summaryModel,
         settings.summaryMaxTokens,
         providers,
@@ -153,6 +160,7 @@ export async function runDiscussion(
       );
       if (summary) {
         conversation.summary = summary;
+        conversation.verdictMode = modeId;
       }
     }
 
@@ -196,7 +204,7 @@ async function checkForNaturalConclusion(
     const response = await provider.getCompletion(
       observerModel,
       [{ role: 'user', content: prompt }],
-      50, // Very short response expected
+      50,
       signal
     );
 
@@ -207,8 +215,9 @@ async function checkForNaturalConclusion(
   }
 }
 
-async function generateSummary(
+async function generateVerdict(
   conversation: ConversationState,
+  modeId: string,
   summaryModel: string,
   maxTokens: number,
   providers: Map<LlmProvider, LlmProviderInterface>,
@@ -221,7 +230,7 @@ async function generateSummary(
       return undefined;
     }
 
-    const prompt = buildSummaryPrompt(conversation.prompt, conversation.transcript);
+    const prompt = buildVerdictPrompt(modeId, conversation.prompt, conversation.transcript);
 
     const summary = await provider.getCompletion(
       summaryModel,
@@ -232,7 +241,7 @@ async function generateSummary(
 
     return summary;
   } catch (err) {
-    console.warn('Failed to generate summary:', err);
+    console.warn('Failed to generate verdict:', err);
     return undefined;
   }
 }
@@ -270,7 +279,8 @@ export async function runDiscussionStreaming(
     onStreamChunk?: (participantName: string, chunk: string) => void;
     onStreamEnd?: (participantName: string) => void;
   } = {},
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  mode?: DiscussionMode
 ): Promise<void> {
   const { onMessage, onRoundStart, onStatusChange, onComplete, onError, onStreamChunk, onStreamEnd } = callbacks;
 
@@ -297,7 +307,8 @@ export async function runDiscussionStreaming(
       const isFinalRound = round === conversation.rounds;
       const shuffledParticipants = shuffleArray(conversation.participants);
 
-      for (const participant of shuffledParticipants) {
+      for (let pIdx = 0; pIdx < shuffledParticipants.length; pIdx++) {
+        const participant = shuffledParticipants[pIdx];
         if (signal?.aborted) {
           throw new Error('Cancelled by user');
         }
@@ -313,14 +324,16 @@ export async function runDiscussionStreaming(
           conversation.prompt,
           conversation.transcript,
           participant,
-          isFinalRound
+          isFinalRound,
+          mode,
+          pIdx,
+          shuffledParticipants.length
         );
 
         try {
           let fullContent = '';
 
           if (provider.streamCompletion) {
-            // Use streaming if available
             for await (const chunk of provider.streamCompletion(
               participant.modelId,
               messages,
@@ -335,7 +348,6 @@ export async function runDiscussionStreaming(
             }
             onStreamEnd?.(participant.displayName);
           } else {
-            // Fall back to non-streaming
             fullContent = await provider.getCompletion(
               participant.modelId,
               messages,
@@ -352,7 +364,10 @@ export async function runDiscussionStreaming(
             round: round
           };
 
-          // Generate per-message summary for long messages
+          conversation.transcript.push(chatMessage);
+          onMessage?.(chatMessage);
+
+          // Generate per-message summary for long messages (after pushing so there's no visual gap)
           if (fullContent.length >= settings.messageSummaryThreshold) {
             chatMessage.summary = await generateMessageSummary(
               fullContent,
@@ -362,9 +377,6 @@ export async function runDiscussionStreaming(
               signal
             );
           }
-
-          conversation.transcript.push(chatMessage);
-          onMessage?.(chatMessage);
         } catch (err) {
           if (signal?.aborted) {
             throw new Error('Cancelled by user');
@@ -407,10 +419,12 @@ export async function runDiscussionStreaming(
     conversation.endedByConsensus = endedByConsensus;
     onStatusChange?.('complete');
 
-    // Generate summary if configured
+    // Generate verdict/summary if configured
     if (settings.summaryModel && conversation.transcript.length > 0) {
-      const summary = await generateSummary(
+      const modeId = conversation.mode ?? settings.mode ?? 'debate';
+      const summary = await generateVerdict(
         conversation,
+        modeId,
         settings.summaryModel,
         settings.summaryMaxTokens,
         providers,
@@ -418,6 +432,7 @@ export async function runDiscussionStreaming(
       );
       if (summary) {
         conversation.summary = summary;
+        conversation.verdictMode = modeId;
       }
     }
 
